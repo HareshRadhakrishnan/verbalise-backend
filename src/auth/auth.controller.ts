@@ -6,6 +6,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { PasswordResetRequestDto, PasswordResetVerifyDto } from './dto/password-reset.dto';
+import { GithubLoginDto } from './dto/github-login.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -46,6 +47,16 @@ export class AuthController {
   async register(@Body() body: RegisterDto) {
     const user = await this.authService.register(body.email, body.password, body.name);
     return { success: true, data: { id: user.id, email: user.email, name: user.name }, message: 'Registration successful', error: null, meta: null };
+  }
+
+  @Post('github')
+  @ApiOperation({ summary: 'Login or register via GitHub OAuth' })
+  @ApiResponse({ status: 200, description: 'User authenticated via GitHub' })
+  @ApiBody({ type: GithubLoginDto })
+  async githubLogin(@Body() body: GithubLoginDto) {
+    const user = await this.authService.githubLogin(body.githubId, body.email, body.name, body.image);
+    const tokens = await this.authService.login(user);
+    return { success: true, data: tokens, message: 'GitHub login successful', error: null, meta: null };
   }
 
   @Post('login')

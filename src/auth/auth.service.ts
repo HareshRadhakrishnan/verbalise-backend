@@ -22,8 +22,22 @@ export class AuthService {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException('Email already in use');
     const passwordHash = await bcrypt.hash(password, 10);
+    const now = new Date();
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
     const user = await prisma.user.create({
-      data: { email, passwordHash, name },
+      data: {
+        email,
+        passwordHash,
+        name,
+        subscription: {
+          create: {
+            plan: 'FREE',
+            status: 'ACTIVE',
+            currentPeriodStart: now,
+            currentPeriodEnd: periodEnd,
+          },
+        },
+      },
     });
     // Generate a 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -86,9 +100,41 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return null;
+    if (!user || !user.passwordHash) return null;
     const valid = await bcrypt.compare(password, user.passwordHash);
     return valid ? user : null;
+  }
+
+  async githubLogin(githubId: string, email: string, name?: string, image?: string): Promise<User> {
+    let user = await prisma.user.findUnique({ where: { githubId } });
+
+    if (!user) {
+      user = await prisma.user.findUnique({ where: { email } });
+      if (user) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { githubId, image: image ?? user.image, emailVerified: user.emailVerified ?? new Date() },
+        });
+      } else {
+        const now = new Date();
+        const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+        user = await prisma.user.create({
+          data: {
+            email, name, image, githubId, emailVerified: new Date(),
+            subscription: {
+              create: {
+                plan: 'FREE',
+                status: 'ACTIVE',
+                currentPeriodStart: now,
+                currentPeriodEnd: periodEnd,
+              },
+            },
+          },
+        });
+      }
+    }
+
+    return user;
   }
 
   async login(user: User) {
